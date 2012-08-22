@@ -37,6 +37,8 @@ module Databasedotcom
     # The SSL verify mode configured for this instance, if any
     attr_accessor :verify_mode
 
+    attr_accessor :logout_flag
+
     # Returns a new client object. _options_ can be one of the following
     #
     # * A String containing the name of a YAML file formatted like:
@@ -329,6 +331,10 @@ module Databasedotcom
       end
     end
 
+    def logout
+      @logout_flag = true
+    end
+
     private
 
     def with_encoded_path_and_checked_response(path, parameters, options = {})
@@ -549,5 +555,6 @@ module Databasedotcom
     def const_defined_in_module(mod, const)
       mod.method(:const_defined?).arity == 1 ? mod.const_defined?(const) : mod.const_defined?(const, false)
     end
+
   end
 end

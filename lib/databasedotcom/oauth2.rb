@@ -13,11 +13,5 @@ module Databasedotcom
   class Client
     attr_accessor :endpoint
     attr_accessor :last_seen
-    attr_accessor :logout_flag
-
-    def logout
-      @logout_flag = true
-    end
-
   end
 end

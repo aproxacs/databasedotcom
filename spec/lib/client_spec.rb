@@ -880,7 +880,7 @@ describe Databasedotcom::Client do
               @client.update("Whizbang", "rid", {:Name => "update"})
               WebMock.should have_requested(:patch, "https://na1.salesforce.com/services/data/v23.0/sobjects/Whizbang/rid")
             end
-            
+
             it "applies type coercions before serializing" do
               stub_request(:patch, "https://na1.salesforce.com/services/data/v23.0/sobjects/Whizbang/rid").to_return(:body => nil, :status => 204)
               @client.update("Whizbang", "rid", "Date_Field" => Date.civil(2011, 1, 1), "DateTime_Field" => DateTime.civil(2011, 2, 1, 12), "Picklist_Multiselect_Field" => %w(a b))
@@ -1184,6 +1184,13 @@ describe Databasedotcom::Client do
         lambda {
           @client.http_patch("/my/path", "data", nil, {"Something" => "Header"})
         }.should raise_error(Databasedotcom::SalesForceError)
+      end
+    end
+
+    describe "#logout" do
+      it "sets logout_flag true" do
+        @client.logout
+        @client.logout_flag.should == true
       end
     end
   end
