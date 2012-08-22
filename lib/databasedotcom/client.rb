@@ -38,6 +38,9 @@ module Databasedotcom
     attr_accessor :verify_mode
 
     attr_accessor :logout_flag
+    attr_accessor :endpoint
+    attr_accessor :last_seen
+
 
     # Returns a new client object. _options_ can be one of the following
     #
