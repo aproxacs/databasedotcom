@@ -121,6 +121,7 @@ module Databasedotcom
           self.refresh_token = options["credentials"]["refresh_token"]
         else
           raise ArgumentError unless options.has_key?(:token) && options.has_key?(:instance_url)
+          parse_user_id_and_org_id_from_identity_url(options[:uid]) if options[:uid]
           self.instance_url = options[:instance_url]
           self.oauth_token = options[:token]
           self.refresh_token = options[:refresh_token]

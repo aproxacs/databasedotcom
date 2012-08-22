@@ -1,10 +1,10 @@
 module Databasedotcom
   module OAuth2
     CLIENT_KEY = "databasedotcom.client"
-    
+
     class WebServerFlow
       def initialize(app, options = nil)
-        @app = app       
+        @app = app
         unless options.nil?
           self.class.symbolize_keys!(options)
           @endpoints            = self.class.sanitize_endpoints(options[:endpoints])
@@ -29,7 +29,7 @@ module Databasedotcom
           + "_ID_FROM_DATABASEDOTCOM, :secret => CLIENT_SECRET_FROM_DATABASEDOTCOM }" \
           + "}\n\n"                                                                   \
           if !@endpoints.is_a?(Hash) || @endpoints.empty?
-            
+
         fail "\n\ndatabasedotcom-oauth2 initialization error!  :token_encryption_key " \
           + "is invalid.  Do something like this:\n\nuse Databasedotcom::OAuth2::WebS" \
           + "erverFlow, :token_encryption_key => YOUR_VERY_LONG_VERY_RANDOM_SECRET_KE" \
@@ -37,10 +37,10 @@ module Databasedotcom
           + "and:\n\n$ ruby -ropenssl -rbase64 -e \"puts Base64.strict_encode64(OpenS" \
           + "SL::Random.random_bytes(16).to_str)\"\n\n"                                \
           if @token_encryption_key.nil? || @token_encryption_key.size < 16
-            
+
         @path_prefix = "/auth/salesforce" unless @path_prefix.is_a?(String) && !@path_prefix.strip.empty?
         @on_failure = nil unless @on_failure.is_a?(Proc)
-      end                
+      end
 
       def call(env)
         dup.call!(env)
@@ -89,7 +89,7 @@ module Databasedotcom
         state.query_values= state.query_values.merge({:endpoint => endpoint.to_s})
 
         puts "(1) endpoint: #{endpoint}\n(2) mydomain: #{mydomain}\n(3) state: #{state.to_str}" if @debugging
-        
+
         #build params hash to be passed to ouath2 authorize redirect url
         auth_params = {
           :redirect_uri  => "#{full_host}#{@path_prefix}/callback",
@@ -113,13 +113,13 @@ module Databasedotcom
           overrides[:scope] = scope unless scope.nil? || scope.strip.empty?
         end
         auth_params.merge!(overrides)
-        
+
         #do redirect
         redirect_url = client(mydomain || endpoint.to_s, keys[:key], keys[:secret]).auth_code.authorize_url(auth_params)
         puts "(4) redirecting to #{redirect_url}..." if @debugging
         redirect redirect_url
       end
-      
+
       def on_callback_path?
         on_path?(@path_prefix + "/callback")
       end
@@ -127,10 +127,10 @@ module Databasedotcom
       def callback_call
         puts "==================\ncallback phase\n==================\n" if @debugging
         #check for error
-        callback_error         = request.params["error"]         
+        callback_error         = request.params["error"]
         callback_error_details = request.params["error_description"]
-        fail "#{callback_error} #{callback_error_details}" unless callback_error.nil? || callback_error.strip.empty? 
-                
+        fail "#{callback_error} #{callback_error_details}" unless callback_error.nil? || callback_error.strip.empty?
+
         #grab authorization code
         code = request.params["code"]
         #grab and remove endpoint from relay state
@@ -150,10 +150,10 @@ module Databasedotcom
         puts "(3) endpoint: #{endpoint}\nstate: #{state.to_str}\nretrieving token" if @debugging
 
         #do callout to retrieve token
-        access_token = client(endpoint.to_s, keys[:key], keys[:secret]).auth_code.get_token(code, 
+        access_token = client(endpoint.to_s, keys[:key], keys[:secret]).auth_code.get_token(code,
           :redirect_uri => "#{full_host}#{@path_prefix}/callback")
         puts "(4) access_token immediatly post get token call #{access_token.inspect}" if @debugging
-        
+
         client = self.class.client_from_oauth_token(access_token)
         client.endpoint = endpoint
         puts "(5) client from token: #{client.inspect}" if @debugging
@@ -202,7 +202,7 @@ module Databasedotcom
         unless client.nil?
           keys = @endpoints[client.endpoint]
           if @debugging
-            puts "(2) client #{client.inspect}" 
+            puts "(2) client #{client.inspect}"
             puts "(3) client.endpoint #{client.endpoint}"
             puts "(4) keys #{keys}"
           end
@@ -218,11 +218,11 @@ module Databasedotcom
         end
         client
       end
-      
+
       def request
         @request ||= Rack::Request.new(@env)
       end
-      
+
       def session
         @env["rack.session"] ||= {} #in case session is nil
         @env["rack.session"]
@@ -250,29 +250,29 @@ module Databasedotcom
           full_host = URI.parse(request.url.gsub(/\?.*$/,''))
           full_host.path = ''
           full_host.query = nil
-          full_host.scheme = 'https' if(request.env['HTTP_X_FORWARDED_PROTO'] == 'https')          
+          full_host.scheme = 'https' if(request.env['HTTP_X_FORWARDED_PROTO'] == 'https')
           full_host = full_host.to_s
         end
         full_host
       end
-      
+
       def client(site, client_id, client_secret)
         ::OAuth2::Client.new(
-           client_id, 
-           client_secret, 
+           client_id,
+           client_secret,
            :site          => "https://#{self.class.parse_domain(site)}",
            :authorize_url => '/services/oauth2/authorize',
            :token_url     => '/services/oauth2/token'
         )
       end
-      
+
       def redirect(uri)
         r = Rack::Response.new
         r.write("Redirecting to #{uri}...")
         r.redirect(uri)
         r.finish
       end
-      
+
       class << self
 
         def symbolize_keys!(hash={})
@@ -300,18 +300,15 @@ module Databasedotcom
         end
 
         def client_from_oauth_token(token)
-          c = nil
-          unless token.nil?
-            c = Databasedotcom::Client.new
-            m = token["id"].match(/\/id\/([^\/]+)\/([^\/]+)$/)
-            c.org_id        = m[1] rescue nil
-            c.user_id       = m[2] rescue nil
-            c.instance_url   = token.params["instance_url"]
-            c.host           = parse_domain(c.instance_url)
-            c.oauth_token    = token.token
-            c.refresh_token  = token.refresh_token
-          end
-          c
+          return nil if token.nil?
+
+          client = Databasedotcom::Client.new
+          client.authenticate uid: token["id"],
+                         instance_url: token.params["instance_url"],
+                         token: token.token,
+                         refresh_token: token.refresh_token
+          client.host = parse_domain(client.instance_url)
+          client
         end
 
         def _log_exception(exception)
@@ -330,13 +327,13 @@ module Databasedotcom
         def sanitize_endpoints(endpoints = nil)
           endpoints = {} unless endpoints.is_a?(Hash)
           endpoints = endpoints.dup
-          endpoints.keep_if do |key,value| 
+          endpoints.keep_if do |key,value|
             value.is_a?(Hash)       &&
-            value.has_key?(:key)    && 
+            value.has_key?(:key)    &&
             value.has_key?(:secret) &&
-            !value[:key].nil?       && 
-            !value[:secret].nil?    && 
-            !value[:key].empty?     && 
+            !value[:key].nil?       &&
+            !value[:secret].nil?    &&
+            !value[:key].empty?     &&
             !value[:secret].empty?
           end
           #set random default if default isn't already populated
@@ -359,7 +356,7 @@ module Databasedotcom
           return_value
         end
 
-      end  
+      end
     end
   end
 end
