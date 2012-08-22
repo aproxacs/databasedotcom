@@ -21,4 +21,36 @@ describe Databasedotcom::OAuth2::WebServerFlow do
       client.refresh_token.should == ref_token
     end
   end
+
+  describe ".parse_domain" do
+    it "parses host from url" do
+      url = "http://my.domain/some/path"
+      host = Databasedotcom::OAuth2::WebServerFlow.parse_domain(url)
+      host.should == "my.domain"
+    end
+
+    it "parses host if url starts with https" do
+      url = "https://my.domain/some/path"
+      host = Databasedotcom::OAuth2::WebServerFlow.parse_domain(url)
+      host.should == "my.domain"
+    end
+
+    it "parses host if url omits http" do
+      url = "my.domain/some/path"
+      host = Databasedotcom::OAuth2::WebServerFlow.parse_domain(url)
+      host.should == "my.domain"
+    end
+
+    it "returns nil if url is invalid" do
+      url = "/invalid/url"
+      host = Databasedotcom::OAuth2::WebServerFlow.parse_domain(url)
+      host.should == nil
+    end
+
+    it "returns nil if url is empty string" do
+      url = ""
+      host = Databasedotcom::OAuth2::WebServerFlow.parse_domain(url)
+      host.should == nil
+    end
+  end
 end

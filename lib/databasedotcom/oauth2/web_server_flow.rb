@@ -275,17 +275,17 @@ module Databasedotcom
 
       class << self
         def parse_domain(url = nil)
+          return nil if url.nil?
+
           url = url.to_s if url.is_a?(Symbol)
-          unless url.nil?
-            url = "https://" + url if (url =~ /http[s]?:\/\//).nil?
-            begin
-              url = Addressable::URI.parse(url)
-            rescue Addressable::URI::InvalidURIError
-              url = nil
-            end
-            url = url.host unless url.nil?
-            url.strip! unless url.nil?
+          url = "https://" + url if (url =~ /http[s]?:\/\//).nil?
+          begin
+            url = Addressable::URI.parse(url)
+          rescue Addressable::URI::InvalidURIError
+            url = nil
           end
+          url = url.host unless url.nil?
+          url.strip! unless url.nil?
           url = nil if url && url.strip.empty?
           url
         end
