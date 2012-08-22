@@ -6,7 +6,7 @@ module Databasedotcom
       def initialize(app, options = nil)
         @app = app
         unless options.nil?
-          self.class.symbolize_keys!(options)
+          options.deep_symbolize_keys!
           @endpoints            = self.class.sanitize_endpoints(options[:endpoints])
           @token_encryption_key = options[:token_encryption_key]
           @path_prefix          = options[:path_prefix]
@@ -274,15 +274,6 @@ module Databasedotcom
       end
 
       class << self
-
-        def symbolize_keys!(hash={})
-          hash.keys.each do |key|
-            value = hash[(key.to_sym rescue key) || key] = hash.delete(key)
-            symbolize_keys!(value) if value.is_a?(Hash)
-          end
-          hash
-        end
-
         def parse_domain(url = nil)
           url = url.to_s if url.is_a?(Symbol)
           unless url.nil?
