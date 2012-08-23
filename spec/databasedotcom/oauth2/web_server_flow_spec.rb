@@ -234,12 +234,86 @@ describe Databasedotcom::OAuth2::WebServerFlow do
         get '/auth/salesforce/callback', callback_params
       end
       
-      it "endpoint is test" do
+      it "endpoint is test"  do
         client.endpoint.to_s.should == "test.salesforce.com"
       end
     end
   end
   
+  
+  describe "normal call" do
+    class BlankApp
+      attr_reader :saved_client
+      def call(env)
+        client = env["databasedotcom.client"]
+        @saved_client = client.dup
+        client.username = "sales king"
+        [200, {}, [@body]]
+      end
+    end
+    let(:blank_app){ BlankApp.new }
+    let(:client) { Databasedotcom::Client.new }
+    let(:client_dump_str) { Gibberish::AES.new(token_encryption_key).encrypt(Marshal.dump(client)) }
+    
+    before(:each) do
+      client.endpoint = "login.salesforce.com"
+    end
+    
+    it "blank_app is called" do
+      blank_app.should_receive(:call).and_return([200, {}, [@body]])
+      
+      get '/resources'
+    end
+    
+    it "client is retrived for blank_app" do
+      get '/resources', {}, "rack.session" => {"databasedotcom.client" => client_dump_str}
+      
+      blank_app.saved_client.should be_instance_of(Databasedotcom::Client)
+    end
+    
+    context "about retrieved client" do
+      let(:retrieved_client) { blank_app.saved_client }
+      
+      before(:each) do
+        get '/resources', {}, "rack.session" => {"databasedotcom.client" => client_dump_str}
+      end
+      
+      it "has client_id" do
+        retrieved_client.client_id.should == "login_endpoint_key"
+      end
+      it "has client_secret" do
+        retrieved_client.client_secret.should == "login_endpoint_secret"
+      end
+      it "has endpoint" do
+        retrieved_client.endpoint.should == "login.salesforce.com"
+      end
+    end
+
+    it "saves changed client" do
+       get '/resources', {}, "rack.session" => {"databasedotcom.client" => client_dump_str}
+       
+       new_client = Marshal.load(Gibberish::AES.new(token_encryption_key).decrypt(last_request.session[client_key]))
+       new_client.username.should == "sales king"
+    end
+    
+    context "when client is logged out" do
+      class LogoutApp
+        def call(env)
+          client = env["databasedotcom.client"]
+          client.logout
+          [200, {}, [@body]]
+        end
+      end
+      
+      let(:blank_app){ LogoutApp.new }
+      
+      it "clears client from session" do
+        get '/resources', {}, "rack.session" => {"databasedotcom.client" => client_dump_str}
+        
+        last_request.session[client_key].should be_nil
+      end
+    end
+  end
   
   describe ".client_from_oauth_token" do
     let(:token) { "acess_token" }
