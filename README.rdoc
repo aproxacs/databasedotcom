@@ -17,7 +17,7 @@ Source is available at github[http://github.com/heroku/databasedotcom]
 
 = Contributions
 
-To contribute, fork this repo, make changes in your fork, then send a pull request.  No pull requests without accompanying tests will be accepted.  To run tests in your fork, just do 
+To contribute, fork this repo, make changes in your fork, then send a pull request.  No pull requests without accompanying tests will be accepted.  To run tests in your fork, just do
 
     bundle install
     rake
@@ -108,6 +108,108 @@ You can authenticate your Client directly with Salesforce with a valid username 
 
     client.authenticate :username => "foo@bar.com", :password => "ThePasswordTheSecurityToken"  #=> "the-oauth-token"
 
+== Authentication via OAuth2 as a rack middleware
+These feature is from {databasedotcom-oauth2}[https://github.com/richardvanhook/databasedotcom-oauth2] as merged.
+
+Usage
+
+==== Minimal
+
+    use Databasedotcom::OAuth2::WebServerFlow,
+      :token_encryption_key => "replace me",
+      :endpoints => {"login.salesforce.com" => {:key => "replace me", :secret => "replace me"}}
+
+Insert above code wherever your {Rack}[http://rack.github.com/] Stack is defined.  See {Required Configuration Parameters}[#required-configuration-parameters] for more information on parameters.
+
+==== Multiple Endpoints
+
+    use Databasedotcom::OAuth2::WebServerFlow,
+    :endpoints => {"login.salesforce.com" => {:key => "replace me", :secret => "replace me"},
+                 "test.salesforce.com"  => {:key => "replace me", :secret => "replace me"}}
+
+==== Authentication
+
+    use Databasedotcom::OAuth2::WebServerFlow,
+      :display   => "touch"        , #default is "page"
+      :immediate => true           , #default is false
+      :prompt    => "login consent", #default is nil
+      :scope     => "full"           #default is "id api refresh_token"
+
+==== Miscellaneous
+
+    use Databasedotcom::OAuth2::WebServerFlow,
+      :api_version => "24.0"      , #default is 25.0
+      :debugging   => "true"      , #default is false
+      :path_prefix => "/auth/sfdc"  #default is /auth/salesforce
+
+=== Required Configuration Parameters
+
+==== :endpoints
+
+Hash of remote access applications; at least one is required.  Values must be generated via {salesforce.com}[http://salesforce.com/] at Setup > App Setup > Develop > Remote Access.  Only one remote access application is needed for production, sandbox, or pre-release; separate entries are not necessary for My Domain.
+
+Example:
+    :endpoints => {"login.salesforce.com" => {:key => "replace me", :secret => "replace me"}
+                   "test.salesforce.com"  => {:key => "replace me", :secret => "replace me"}}
+
+Default: nil
+
+==== :token_encryption_key
+
+Encrypts OAuth 2.0 token prior to persistence in session store.  Any Rack session store can be used:  Rack:Session:Cookie, Rack:Session:Pool, etc.  A sufficiently strong key **must** be generated.  It's recommended you use the following command to generate a random key value.
+
+    ruby -ropenssl -rbase64 -e "puts Base64.strict_encode64(OpenSSL::Random.random_bytes(16).to_str)"
+
+It's also recommended you store the key value as an environment variable as opposed to a string literal in your code.  To both create the key value and store as an environment variable, use this command:
+
+    export TOKEN=`ruby -ropenssl -rbase64 -e "puts Base64.strict_encode64(OpenSSL::Random.random_bytes(16).to_str)"`
+
+Then, in your code, decrypt prior to use:
+
+    require "base64"
+    Base64.strict_decode64(ENV['TOKEN'])
+
+Default: nil
+
+=== Optional Configuration Parameters
+
+==== :display, :immediate, :prompt, :scope
+
+Values passed directly to {salesforce.com}[http://salesforce.com/] which control authentication behavior.  See {OAuth 2.0 Web Server Authentication Flow}[http://na12.salesforce.com/help/doc/en/remoteaccess_oauth_web_server_flow.htm#heading_2_1] for detailed explanation as well as valid and default values.
+
+Default: see {OAuth 2.0 Web Server Authentication Flow}[http://na12.salesforce.com/help/doc/en/remoteaccess_oauth_web_server_flow.htm#heading_2_1]
+
+==== :display_override, :immediate_override, :prompt_override, :scope_override
+
+Allow correspondingly named parameter to be overridden at runtime via http parameter of same name.  For example, if your app is capable of detecting the client device type, set **`:display_override`** to true and pass a display http parameter to `/auth/salesforce`.
+
+Default: false
+
+==== :api_version
+
+For explanation of api versions, see {What's New in Version XX.X}[http://www.salesforce.com/us/developer/docs/api/Content/whats_new.htm]
+
+Default: 25.0
+
+==== :debugging
+
+Will enable debug output for both this gem and {databasedotcom}[https://rubygems.org/gems/databasedotcom].
+
+Default: false
+
+==== :on_failure
+
+A lambda block to be executed upon authentication failure.
+
+Default: redirect to `/auth/salesforce/failure` with error message passed via message http parameter.
+
+==== :path_prefix
+
+The path that signals databasedotcom-oauth2 to initiate authentication with {salesforce.com}[http://salesforce.com/].
+
+Default: /auth/salesforce
+
+
 == Accessing the Sobject API
 You can retrieve a list of Sobject defined in your Salesforce instance like so:
 
@@ -143,7 +245,7 @@ See the documentation[http://rubydoc.info/github/heroku/databasedotcom/master/fr
 You can easily access Chatter feeds, group, conversations, etc.:
 
     my_feed_items = Databasedotcom::Chatter::UserProfileFeed.find(client)  #=> a Databasedotcom::Collection of FeedItems
-    
+
     my_feed_items.each do |feed_item|
       feed_item.likes                   #=> a Databasedotcom::Collection of Like instances
       feed_item.comments                #=> a Databasedotcom::Collection of Comment instances
@@ -155,7 +257,7 @@ You can easily access Chatter feeds, group, conversations, etc.:
     me = Databasedotcom::Chatter::User.find(client, "me")   #=> a User for the authenticating user
     me.followers                                              #=> a Databasedotcom::Collection of Users
     me.post_status("what I'm doing now")                      #=> post a new status
-    
+
     you = Databasedotcom::Chatter::User.find(client, "your-user-id")
     me.follow(you)                                            #=> start following a user
 
