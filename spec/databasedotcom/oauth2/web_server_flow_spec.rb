@@ -1,7 +1,38 @@
 require 'spec_helper'
 require 'databasedotcom'
+require 'rack/test'
 
 describe Databasedotcom::OAuth2::WebServerFlow do
+  include Rack::Test::Methods
+  let(:blank_app){ lambda{|env| [200, {}, [@body]]} }
+  let(:endpoints) { {"login.salesforce.com" => {:key => "login_key", :secret => "login_secret"}} }
+  let(:token_encryption_key) { "9rg/hsK8ZSi+jc8R40ruJQ==" }
+  let(:app) { Databasedotcom::OAuth2::WebServerFlow.new(blank_app,  endpoints: endpoints, token_encryption_key: token_encryption_key) }
+  
+  describe "initialization" do    
+    context "failure case" do
+      it "fails if endpoint is not present" do
+        expect { Databasedotcom::OAuth2::WebServerFlow.new(blank_app) }.to raise_error(RuntimeError)
+      end
+      it "fails when endpoints are not hash" do
+        expect { Databasedotcom::OAuth2::WebServerFlow.new(blank_app,  endpoints: "endpoint") }.to raise_error(RuntimeError)
+      end
+
+      it "fails when token_encryption_key is not present" do
+        expect { Databasedotcom::OAuth2::WebServerFlow.new(blank_app,  endpoints: endpoints) }.to raise_error(RuntimeError)
+      end
+      it "fails when token_encryption_key is invalid" do
+        expect { Databasedotcom::OAuth2::WebServerFlow.new(blank_app,  endpoints: endpoints, token_encryption_key: "invalid") }.to raise_error(RuntimeError)
+      end      
+    end
+    
+    context "default values" do
+      it "path_prefix is '/auth/salesforce" do
+        app.path_prefix.should == "/auth/salesforce"
+      end
+    end
+  end
+  
   describe ".client_from_oauth_token" do
     let(:token) { "acess_token" }
     let(:ref_token) { "refresh_token" }

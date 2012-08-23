@@ -1,8 +1,9 @@
 module Databasedotcom
   module OAuth2
     CLIENT_KEY = "databasedotcom.client"
-
+    
     class WebServerFlow
+      attr_reader :path_prefix
       def initialize(app, options = nil)
         @app = app
         unless options.nil?
