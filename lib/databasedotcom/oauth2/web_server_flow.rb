@@ -73,6 +73,15 @@ module Databasedotcom
       def on_authorize_path?
         on_path?(@path_prefix)
       end
+      
+      def state
+        @state ||= begin
+          request.params["state"] ||= "/"
+          state = Addressable::URI.parse(request.params["state"])
+          state.query_values={} unless state.query_values
+          state
+        end
+      end
 
       def authorize_call
         puts "==================\nauthorize phase\n==================\n" if @debugging
@@ -84,14 +93,17 @@ module Databasedotcom
         mydomain = self.class.sanitize_mydomain(request.params["mydomain"])
 
         #add endpoint to relay state so callback knows which keys to use
-        request.params["state"] ||= "/"
-        state = Addressable::URI.parse(request.params["state"])
-        state.query_values={} unless state.query_values
         state.query_values= state.query_values.merge({:endpoint => endpoint.to_s})
 
         puts "(1) endpoint: #{endpoint}\n(2) mydomain: #{mydomain}\n(3) state: #{state.to_str}" if @debugging
 
-        #build params hash to be passed to ouath2 authorize redirect url
+        #do redirect
+        redirect_url = client(mydomain || endpoint.to_s, keys[:key], keys[:secret]).auth_code.authorize_url(auth_params)
+        puts "(4) redirecting to #{redirect_url}..." if @debugging
+        redirect redirect_url
+      end
+      
+      def auth_params
         auth_params = {
           :redirect_uri  => "#{full_host}#{@path_prefix}/callback",
           :state         => state.to_str
@@ -114,11 +126,6 @@ module Databasedotcom
           overrides[:scope] = scope unless scope.nil? || scope.strip.empty?
         end
         auth_params.merge!(overrides)
-
-        #do redirect
-        redirect_url = client(mydomain || endpoint.to_s, keys[:key], keys[:secret]).auth_code.authorize_url(auth_params)
-        puts "(4) redirecting to #{redirect_url}..." if @debugging
-        redirect redirect_url
       end
 
       def on_callback_path?
@@ -127,27 +134,17 @@ module Databasedotcom
 
       def callback_call
         puts "==================\ncallback phase\n==================\n" if @debugging
-        #check for error
-        callback_error         = request.params["error"]
-        callback_error_details = request.params["error_description"]
-        fail "#{callback_error} #{callback_error_details}" unless callback_error.nil? || callback_error.strip.empty?
+
+        check_error
 
         #grab authorization code
         code = request.params["code"]
-        #grab and remove endpoint from relay state
-        #upon successful retrieval of token, state is url where user will be redirected to
-        request.params["state"] ||= "/"
-        state = Addressable::URI.parse(request.params["state"])
-        state.query_values= {} if state.query_values.nil?
-        state_params = state.query_values.dup
-        endpoint = state_params.delete("endpoint")
-        endpoint = endpoint.to_sym unless endpoint.nil?
+        
+        endpoint = retreive_endpoint_from_state
         keys = @endpoints[endpoint]
+
         puts "(1) endpoint #{endpoint}" if @debugging
         puts "(2) keys #{keys}" if @debugging
-        state.query_values= state_params
-        state = state.to_s
-        state.sub!(/\?$/,"") unless state.nil?
         puts "(3) endpoint: #{endpoint}\nstate: #{state.to_str}\nretrieving token" if @debugging
 
         #do callout to retrieve token
@@ -158,34 +155,61 @@ module Databasedotcom
         client = self.class.client_from_oauth_token(access_token)
         client.endpoint = endpoint
         puts "(5) client from token: #{client.inspect}" if @debugging
+        
         save_client_to_session(client)
         puts "(6) session_client \n#{session_client}" if @debugging
-        redirect state.to_str
+        
+        redirect_to_state_path
+      end
+      
+      def check_error
+        callback_error         = request.params["error"]
+        callback_error_details = request.params["error_description"]
+        fail "#{callback_error} #{callback_error_details}" unless callback_error.nil? || callback_error.strip.empty?
+      end
+      
+      def retreive_endpoint_from_state
+        #grab and remove endpoint from relay state
+        state_params = state.query_values.dup
+        endpoint = state_params.delete("endpoint")
+        state.query_values= state_params
+        
+        endpoint = endpoint.to_sym unless endpoint.nil?
+        endpoint
+      end
+      
+      def redirect_to_state_path
+        path = state.to_s
+        path.sub!(/\?$/,"") unless path.nil?
+        redirect path.to_str
       end
 
       def save_client_to_session(client)
         puts "==========================\nsave_client_to_session\n==========================\n" if @debugging
         puts "(1) client as stored in session \n#{session_client}" if @debugging
         puts "(2) client to save: #{client.inspect}" if @debugging
-        unless client.nil?
-          new_session_client = nil
-          unless client.logout_flag
-            # Zero out client id and secret; will re-populate later when client
-            #   is reloaded.  Should be safe to store client id and secret inside
-            #   encrypted client; however, out of an abundance of caution (and b/c
-            #   it just makes sense), client id and secret will never be written
-            #   to session but only stored via @endpoints variable server side.
-            client.client_id     = nil
-            client.client_secret = nil
-            client.version       = nil
-            client.debugging     = nil
-            client.last_seen     = Time.now
-            new_session_client = Gibberish::AES.new(@token_encryption_key).encrypt(Marshal.dump(client))
-          end
-          if new_session_client != session_client
-            session_client_put(new_session_client)
-          end
+        
+        return if client.nil?
+        new_session_client = nil
+
+        unless client.logout_flag
+          # Zero out client id and secret; will re-populate later when client
+          #   is reloaded.  Should be safe to store client id and secret inside
+          #   encrypted client; however, out of an abundance of caution (and b/c
+          #   it just makes sense), client id and secret will never be written
+          #   to session but only stored via @endpoints variable server side.
+          client.client_id     = nil
+          client.client_secret = nil
+          client.version       = nil
+          client.debugging     = nil
+          client.last_seen     = Time.now
+          new_session_client = Gibberish::AES.new(@token_encryption_key).encrypt(Marshal.dump(client))
         end
+
+        if new_session_client != session_client
+          session_client_put(new_session_client)
+        end
+
         puts "(3) client as stored in session \n#{session_client}" if @debugging
 
       end
