@@ -127,6 +127,25 @@ describe Databasedotcom::OAuth2::WebServerFlow do
         end
       end
     end
+
+    context "with optional configurations" do
+      let(:app_options) {
+        {
+          :display   => "touch"        ,
+          :immediate => true           ,
+          :prompt    => "login consent",
+          :scope     => "full"
+        }
+      }
+      it "sets optional configurations to redirect uri's query" do
+        get '/auth/salesforce'
+
+        redirect_uri.query_values["display"].should == "touch"
+        redirect_uri.query_values["immediate"].should == "true"
+        redirect_uri.query_values["prompt"].should == "login consent"
+        redirect_uri.query_values["scope"].should == "full"
+      end
+    end
   end
 
 
