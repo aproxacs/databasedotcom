@@ -4,6 +4,8 @@ require 'rack/test'
 
 describe Databasedotcom::OAuth2::WebServerFlow do
   include Rack::Test::Methods
+  
+  let(:client_key) { Databasedotcom::OAuth2::CLIENT_KEY }
   let(:blank_app){ lambda{|env| [200, {}, [@body]]} }
   let(:endpoints) { 
     {
@@ -87,9 +89,9 @@ describe Databasedotcom::OAuth2::WebServerFlow do
     
     context "when state is set from params" do
       it "endpoint is added to state" do
-        get '/auth/salesforce', state: "/?user_name=tom"
+        get '/auth/salesforce', state: "/resource?user_name=tom"
 
-        redirect_uri.query_values["state"].should == "/?endpoint=login.salesforce.com&user_name=tom"
+        redirect_uri.query_values["state"].should == "/resource?endpoint=login.salesforce.com&user_name=tom"
       end
     end
     
@@ -116,6 +118,127 @@ describe Databasedotcom::OAuth2::WebServerFlow do
     end
   end
   
+  
+  describe "callback call" do
+    let(:code) { "aPrxaSyVmC8fBbcC1ICrxChWKeijMiaEmBJI9ffNRd2A9PK59xdg8NBAk4s7qY2NODiFo5jrBg==" }
+    let(:state) { "/?endpoint=login.salesforce.com" }
+    let(:callback_params) { {code: code, state: state} }
+    let(:refresh_token) { "5Aep8617VFpoP.M.4shLYDVt1xSb.pe3AybT2avEVqEGfjK7oLQv_E5Vkx0UEN7r23RtP.DIgLmKA==" }
+    let(:access_token) { "00D90000000gMbi!AQQAQNOFj9qi9ahV9xwx0lqg4dzlDvED7f2EFsuTMU6cgAuia3uhkNPJD3P18b4FG_fE9Qf8hiW7_gJB3wUDyPx8Gh1FJNua" }
+    let(:org_id) { "org_id" }
+    let(:user_id) { "user_id" }
+    let(:instance_url) { "https://ap1.salesforce.com" }
+    let(:token_body) { 
+      {
+        "id"=>"https://login.salesforce.com/id/#{org_id}/#{user_id}", 
+        "issued_at"=>"1345695997104", "scope"=>"id api refresh_token",
+        "instance_url"=> instance_url, 
+        "refresh_token"=> refresh_token,
+        "signature"=>"L9DbTRS248+MT2AYG7LK96BrRWCYkT+cw0UlqVJ1WMQ=", 
+        "access_token" => access_token
+      }.to_json
+    }
+    before(:each) do
+      stub_request(:post, "https://login.salesforce.com/services/oauth2/token").
+        to_return(:status => 200, :body => token_body, :headers => {'Content-Type' => "application/json"})
+    end
+    
+    def redirect_uri
+      Addressable::URI.parse(last_response.location)
+    end
+    
+    
+    it "intercepts request" do
+      blank_app.should_not_receive(:call)
+      
+      get '/auth/salesforce/callback', callback_params
+    end
+    
+    context "in case of error" do
+      let(:callback_params) { {error: "error", error_description: "some error"} }
+      
+      it "redirects to failure path" do
+        app.class.stub(:_log_exception) # to avoid runtime error message to be displayed.
+        get '/auth/salesforce/callback', callback_params
+        
+        last_response.should be_redirect
+        redirect_uri.path.should == "/auth/salesforce/failure"
+      end
+    end
+    
+    context "when using login endpoint" do
+      let(:state) { "/?endpoint=login.salesforce.com" }
+      
+      it "redirects to state path with endpoint removed" do
+        get '/auth/salesforce/callback', callback_params
+        
+        last_response.should be_redirect
+        redirect_uri.path.should == "/"
+      end
+      
+      it "saves client to session" do
+        get '/auth/salesforce/callback', callback_params
+        
+        last_request.session[client_key].should_not be_nil
+      end
+      
+      context "about client" do
+        let(:client) { Marshal.load(Gibberish::AES.new(token_encryption_key).decrypt(last_request.session[client_key]))  }
+        before(:each) do
+          get '/auth/salesforce/callback', callback_params
+        end
+        
+        it "endpoint is login" do
+          client.endpoint.to_s.should == "login.salesforce.com"
+        end
+        
+        it "has oauth_token" do
+          client.oauth_token.should == access_token
+        end
+        
+        it "has refresh_token" do
+          client.refresh_token.should == refresh_token
+        end
+        
+        it "has instance_url" do
+          client.instance_url.should == instance_url
+        end
+        
+        it "has org_id" do
+          client.org_id.should == org_id
+        end
+        
+        it "has user_id" do
+          client.user_id.should == user_id
+        end
+        
+        it "does not have client_id" do
+          client.client_id.should be_nil
+        end
+        
+        it "does not have client_secret" do
+          client.client_secret.should be_nil
+        end
+      end
+      
+    end
+    
+    context "when using test endpoint" do
+      let(:state) { "/?endpoint=test.salesforce.com" }
+      let(:client) { Marshal.load(Gibberish::AES.new(token_encryption_key).decrypt(last_request.session[client_key]))  }
+      before(:each) do
+        stub_request(:post, "https://test.salesforce.com/services/oauth2/token").
+          to_return(:status => 200, :body => token_body, :headers => {'Content-Type' => "application/json"})
+        
+        
+        get '/auth/salesforce/callback', callback_params
+      end
+      
+      it "endpoint is test" do
+        client.endpoint.to_s.should == "test.salesforce.com"
+      end
+    end
+  end
   
   
   describe ".client_from_oauth_token" do
