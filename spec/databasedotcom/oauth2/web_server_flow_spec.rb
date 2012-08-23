@@ -5,9 +5,15 @@ require 'rack/test'
 describe Databasedotcom::OAuth2::WebServerFlow do
   include Rack::Test::Methods
   let(:blank_app){ lambda{|env| [200, {}, [@body]]} }
-  let(:endpoints) { {"login.salesforce.com" => {:key => "login_key", :secret => "login_secret"}} }
+  let(:endpoints) { 
+    {
+      "login.salesforce.com" => {:key => "login_endpoint_key", :secret => "login_endpoint_secret"},
+      "test.salesforce.com"  => {:key => "test_endpoint_key", :secret => "test_endpoint_secret"}
+    } 
+  }
   let(:token_encryption_key) { "9rg/hsK8ZSi+jc8R40ruJQ==" }
-  let(:app) { Databasedotcom::OAuth2::WebServerFlow.new(blank_app,  endpoints: endpoints, token_encryption_key: token_encryption_key) }
+  let(:app_options) { {} }
+  let(:app) { Databasedotcom::OAuth2::WebServerFlow.new(blank_app, app_options.merge(endpoints: endpoints, token_encryption_key: token_encryption_key)) }
   
   describe "initialization" do    
     context "failure case" do
@@ -32,6 +38,85 @@ describe Databasedotcom::OAuth2::WebServerFlow do
       end
     end
   end
+  
+  describe "authorize call" do
+    it "intercepts request" do
+      blank_app.should_not_receive(:call)
+      get '/auth/salesforce'
+    end
+    
+    def redirect_uri
+      Addressable::URI.parse(last_response.location)
+    end
+    
+    context "when using default endpoint" do
+      before(:each) do
+        get '/auth/salesforce'
+      end
+      
+      it "redirects to the authorize path of default endpoint" do
+        last_response.should be_redirect
+        
+        redirect_uri.host.should == "login.salesforce.com"
+        redirect_uri.path.should == "/services/oauth2/authorize"
+      end
+      
+      context "redirect url" do
+        it "includes client_id of default endpoint" do
+          redirect_uri.query_values["client_id"].should == "login_endpoint_key"
+        end
+        
+        it "includes state which has endpoint" do
+          redirect_uri.query_values["state"].should == "/?endpoint=login.salesforce.com"
+        end
+        
+        it "includes redirect_uri which has callback path" do
+          redirect_uri.query_values["redirect_uri"].should == "http://example.org/auth/salesforce/callback"
+        end
+      end
+    end
+
+    
+    context "when mydomain is set from params" do
+      it "redirects to mydomain" do
+        get '/auth/salesforce', mydomain: "forceuser"
+
+        redirect_uri.host.should == "forceuser.my.salesforce.com"
+      end
+    end
+    
+    context "when state is set from params" do
+      it "endpoint is added to state" do
+        get '/auth/salesforce', state: "/?user_name=tom"
+
+        redirect_uri.query_values["state"].should == "/?endpoint=login.salesforce.com&user_name=tom"
+      end
+    end
+    
+    context "when endpoint is test.salesforce.com" do
+      let(:endpoint) { "test.salesforce.com" }
+      
+      before(:each) do
+        get '/auth/salesforce', endpoint: endpoint
+      end
+      
+      it "redirects to test endpoint" do
+        redirect_uri.host.should == "test.salesforce.com"
+      end
+      
+      context "redirect url" do
+        it "includes client_id of default endpoint" do
+          redirect_uri.query_values["client_id"].should == "test_endpoint_key"
+        end
+        
+        it "includes state which has endpoint" do
+          redirect_uri.query_values["state"].should == "/?endpoint=test.salesforce.com"
+        end        
+      end
+    end
+  end
+  
+  
   
   describe ".client_from_oauth_token" do
     let(:token) { "acess_token" }
