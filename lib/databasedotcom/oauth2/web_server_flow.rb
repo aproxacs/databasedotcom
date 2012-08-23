@@ -1,9 +1,11 @@
 module Databasedotcom
   module OAuth2
     CLIENT_KEY = "databasedotcom.client"
-    
+
     class WebServerFlow
-      attr_reader :path_prefix
+      attr_reader :path_prefix, :display_override, :immediate_override, :prompt_override, :scope_override
+      attr_reader :api_version
+
       def initialize(app, options = nil)
         @app = app
         unless options.nil?
@@ -73,7 +75,7 @@ module Databasedotcom
       def on_authorize_path?
         on_path?(@path_prefix)
       end
-      
+
       def state
         @state ||= begin
           request.params["state"] ||= "/"
@@ -102,7 +104,7 @@ module Databasedotcom
         puts "(4) redirecting to #{redirect_url}..." if @debugging
         redirect redirect_url
       end
-      
+
       def auth_params
         auth_params = {
           :redirect_uri  => "#{full_host}#{@path_prefix}/callback",
@@ -139,7 +141,7 @@ module Databasedotcom
 
         #grab authorization code
         code = request.params["code"]
-        
+
         endpoint = retreive_endpoint_from_state
         keys = @endpoints[endpoint]
 
@@ -155,29 +157,29 @@ module Databasedotcom
         client = self.class.client_from_oauth_token(access_token)
         client.endpoint = endpoint
         puts "(5) client from token: #{client.inspect}" if @debugging
-        
+
         save_client_to_session(client)
         puts "(6) session_client \n#{session_client}" if @debugging
-        
+
         redirect_to_state_path
       end
-      
+
       def check_error
         callback_error         = request.params["error"]
         callback_error_details = request.params["error_description"]
         fail "#{callback_error} #{callback_error_details}" unless callback_error.nil? || callback_error.strip.empty?
       end
-      
+
       def retreive_endpoint_from_state
         #grab and remove endpoint from relay state
         state_params = state.query_values.dup
         endpoint = state_params.delete("endpoint")
         state.query_values= state_params
-        
+
         endpoint = endpoint.to_sym unless endpoint.nil?
         endpoint
       end
-      
+
       def redirect_to_state_path
         path = state.to_s
         path.sub!(/\?$/,"") unless path.nil?
@@ -188,7 +190,7 @@ module Databasedotcom
         puts "==========================\nsave_client_to_session\n==========================\n" if @debugging
         puts "(1) client as stored in session \n#{session_client}" if @debugging
         puts "(2) client to save: #{client.inspect}" if @debugging
-        
+
         return if client.nil?
         new_session_client = nil
 
