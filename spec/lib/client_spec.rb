@@ -613,6 +613,81 @@ describe Databasedotcom::Client do
         end
       end
 
+      describe "#record_from_hash" do
+        let(:hash) { JSON.parse(File.read(File.join(File.dirname(__FILE__), "../fixtures/sobject/sobject_for_record_from_hash.json")))  }
+
+        let(:record) { @client.send(:record_from_hash, hash) }
+
+        it "returns the instance of attributes's type class" do
+          record.should be_instance_of(MySobjects::Whizbang)
+        end
+
+        context "for simple fields" do
+          it "sets value" do
+            record.Id.should == hash["Id"]
+            record.Name.should == hash["Name"]
+            record.IsDeleted.should == hash["IsDeleted"]
+          end
+
+          it "name is used instead of label" do
+            record.Currency_Field.should == hash["Currency_Label"]
+          end
+
+          it "converts to datetime if type is datetime" do
+            record.DateTime_Field.should be_instance_of(DateTime)
+            record.DateTime_Field.should == DateTime.parse(hash["DateTime_Label"])
+          end
+        end
+
+        context "when hash has invalid name" do
+          let(:hash) { JSON.parse(File.read(File.join(File.dirname(__FILE__), "../fixtures/sobject/sobject_invalid_for_record_from_hash.json")))  }
+
+          it "ignores invalid name" do
+            record.should_not respond_to("InvalidField")
+          end
+
+          it "stops parsing" do
+            # since InvalidField is located upper than OwnerId, OwnerId is not parsed.
+            record.OwnerId.should be_nil
+          end
+        end
+
+        context "for reference type of filed" do
+          context "when values is not hash" do
+            it "sets value" do
+              record.OwnerId.should == hash["OwnerId"]
+            end
+          end
+
+          context "when value is hash" do
+            it "relationshipName is used instead of name" do
+              # relationshipName of CreatedById is CreatedBy
+              record.CreatedById.should be_nil
+              record.CreatedBy.should_not be_nil
+            end
+
+            it "converts value(hash) to sobject" do
+              record.CreatedBy.should be_instance_of(MySobjects::Whizbang)
+              record.CreatedBy.Id.should == hash["CreatedById"]["Id"]
+            end
+          end
+        end
+
+        context "for parent to child asscociations" do
+          context "when value is hash and has record" do
+            it "converts value(hash) to collection" do
+              record.Customers.should be_instance_of(Databasedotcom::Collection)
+            end
+          end
+
+          context "when value is invalid hash for associations" do
+            it "ignores" do
+              record.should_not respond_to("InvalidCustomers")
+            end
+          end
+        end
+      end
+
       describe "#find" do
         context "with a valid id" do
           before do

@@ -1,0 +1,11 @@
+{
+  "attributes" : {
+    "type" : "Whizbang",
+    "url" : "/services/data/v20.0/sobjects/Whizbang/23foo"
+  },
+  "Id" : "23foo",
+  "Name" : "My First Whizbang",
+  "InvalidField": "invalid",
+  "OwnerId" : "owner_id",
+  "Currency_Label" : 23.0
+}

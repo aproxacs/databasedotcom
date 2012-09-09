@@ -452,16 +452,28 @@ module Databasedotcom
           key_from_label(field["label"]) == name || field["name"] == name || field["relationshipName"] == name
         end
 
-        # Field not found
+        # Field not found, check for parent-to-child associations
         if field == nil
-          break
+          break unless value.is_a?(Hash) && value["records"]
+
+          # if value is hash and has "records"
+          # then it's an association
+          begin
+            new_record.class.register_field name, {:type => "reference", :label => name}
+            field = {}
+            value = collection_from_hash(value)
+          rescue Databasedotcom::SalesForceError
+            break
+          end
         end
 
         # If reference/lookup field data was fetched, recursively build the child record and apply
         if value.is_a?(Hash) and field['type'] == 'reference' and field["relationshipName"]
           relation = record_from_hash( value )
           set_value( new_record, field["relationshipName"], relation, 'reference' )
-
+        # If the value is a collection, set the association on the record
+        elsif value.is_a?(Databasedotcom::Collection)
+          set_value( new_record, name, value, 'reference' )
         # Apply the raw value for all other field types
         else
           set_value(new_record, field["name"], value, field["type"]) if field

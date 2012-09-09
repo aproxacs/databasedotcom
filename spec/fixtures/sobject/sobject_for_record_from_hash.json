@@ -1,0 +1,49 @@
+{
+  "attributes" : {
+    "type" : "Whizbang",
+    "url" : "/services/data/v20.0/sobjects/Whizbang/23foo"
+  },
+  "Id" : "23foo",
+  "IsDeleted" : false,
+  "Name" : "My First Whizbang",
+  "OwnerId" : "owner_id",
+  "Currency_Label" : 23.0,
+  "DateTime_Label" : "2011-07-07T00:37:00.000+0000",
+  "CreatedById" : {
+    "attributes" : {
+      "type" : "Whizbang",
+      "url" : "/services/data/v20.0/sobjects/Whizbang/24foo"
+    },
+    "Id" : "24foo",
+    "OwnerId" : "owner_id",
+    "Name" : "My Second Whizbang",
+    "CreatedById" : "created_by_id"
+  },
+  "Customers": {
+    "records": [
+      {
+        "attributes" : {
+          "type" : "Whizbang",
+          "url" : "/services/data/v20.0/sobjects/Whizbang/25foo"
+        },
+        "Id" : "25foo",
+        "OwnerId" : "owner_id",
+        "Name" : "My Second Whizbang",
+        "CreatedById" : "created_by_id"
+      },
+      {
+        "attributes" : {
+          "type" : "Whizbang",
+          "url" : "/services/data/v20.0/sobjects/Whizbang/26foo"
+        },
+        "Id" : "26foo",
+        "OwnerId" : "owner_id",
+        "Name" : "My Second Whizbang",
+        "CreatedById" : "created_by_id"
+      }
+    ]
+  },
+  "InvalidCustomers": {
+    "count": 9
+  }
+}
